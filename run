@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# claude3's Run button runs this. winsnap has no dev server: Run is the deploy.
+exec "$(dirname "$0")/deploy" "$@"

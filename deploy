@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Deploy winsnap: rebuild winsnap.exe in place (the taskbar pin points at it), only when
+# winsnap.cs or build.cmd changed since the last good build. Runs under Git Bash on Windows
+# (claude3's Run button, via ./run).
+set -euo pipefail
+trap 'echo; echo "====== ENDED ======"' EXIT
+cd "$(dirname "$0")"
+
+hashed() { find "$@" -type f -print0 | sort -z | xargs -0 sha1sum | sha1sum | cut -c1-12; }
+
+inputs=(winsnap.cs build.cmd)
+want=$(hashed "${inputs[@]}")
+have=$(cat .build-hash 2>/dev/null || true)
+
+if [[ -f winsnap.exe && "$have" == "$want" ]]; then
+  echo "== winsnap.exe: up to date ($want)"
+else
+  echo "== winsnap.exe: building ($want)"
+  # The exe is locked while it runs, and csc would fail with a less helpful message.
+  procs=$(MSYS_NO_PATHCONV=1 tasklist /FI "IMAGENAME eq winsnap.exe" /NH /FO CSV)
+  if grep -qi '^"winsnap.exe"' <<< "$procs"; then
+    echo "!! winsnap.exe is running (its window is open), so it can't be rebuilt: close it and Run again"
+    exit 1
+  fi
+  start=$(date +%s)
+  # Through cmd.exe so build.cmd stays the one place the csc command lives. MSYS_NO_PATHCONV
+  # stops Git Bash rewriting /d and /c as paths.
+  if ! out=$(MSYS_NO_PATHCONV=1 cmd.exe /d /c '.\build.cmd' 2>&1); then
+    echo "!! build failed:"
+    printf '%s\n' "$out" | tr -d '\r' | sed '/^$/d; s/^/!! /'
+    exit 1
+  fi
+  [[ -n "$out" ]] && printf '%s\n' "$out" | tr -d '\r' | sed '/^$/d; s/^/   /'
+  if [[ ! -f winsnap.exe || "$(stat -c %Y winsnap.exe)" -lt "$start" ]]; then
+    echo "!! build reported success but winsnap.exe was not rewritten"
+    exit 1
+  fi
+  echo "$want" > .build-hash
+  echo "== winsnap.exe: built ($(stat -c %s winsnap.exe) bytes)"
+fi
+
+printf '%s\n' "${inputs[@]}" > .deployed

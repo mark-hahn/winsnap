@@ -1,0 +1,9 @@
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+
+# Deploy (./deploy): the deploy-warning stamp and the hash of the last good build.
+.deployed
+.build-hash
+
+# Build output (./deploy rebuilds it from winsnap.cs via build.cmd).
+winsnap.exe
